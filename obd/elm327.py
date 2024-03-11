@@ -34,6 +34,7 @@ import re
 import serial
 import time
 import logging
+import socket
 from .protocols import *
 from .utils import OBDStatus
 
@@ -105,15 +106,14 @@ class ELM327:
     # going to be less picky about the time required to detect it.
     _TRY_BAUDS = [38400, 9600, 230400, 115200, 57600, 19200]
 
-    def __init__(self, portname, baudrate, protocol, timeout,
+    def __init__(self, addr, port, protocol, timeout,
                  check_voltage=True, start_low_power=False):
         """Initializes port by resetting device and gettings supported PIDs. """
 
-        logger.info("Initializing ELM327: PORT=%s BAUD=%s PROTOCOL=%s" %
+        logger.info("Initializing ELM327: ADDR=%s PORT=%s" %
                     (
-                        portname,
-                        "auto" if baudrate is None else baudrate,
-                        "auto" if protocol is None else protocol,
+                        addr,
+                        port
                     ))
 
         self.__status = OBDStatus.NOT_CONNECTED
@@ -121,14 +121,11 @@ class ELM327:
         self.__protocol = UnknownProtocol([])
         self.__low_power = False
         self.timeout = timeout
-
-        # ------------- open port -------------
+        
+            # ------------- open port -------------
         try:
-            self.__port = serial.serial_for_url(portname,
-                                                parity=serial.PARITY_NONE,
-                                                stopbits=1,
-                                                bytesize=8,
-                                                timeout=10)  # seconds
+            self.__port = socket.socket()
+            self.__port.connect((addr, port))
         except serial.SerialException as e:
             self.__error(e)
             return
@@ -140,12 +137,6 @@ class ELM327:
         if start_low_power:
             self.__write(b" ")
             time.sleep(1)
-
-        # ------------------------ find the ELM's baud ------------------------
-
-        if not self.set_baudrate(baudrate):
-            self.__error("Failed to set baudrate")
-            return
 
         # ---------------------------- ATZ (reset) ----------------------------
         try:
@@ -190,16 +181,15 @@ class ELM327:
                 self.__error("Incorrect response from 'AT RV'")
                 return
             # by now, we've successfuly connected to the OBD socket
-            self.__status = OBDStatus.OBD_CONNECTED
+        self.__status = OBDStatus.OBD_CONNECTED
 
         # try to communicate with the car, and load the correct protocol parser
         if self.set_protocol(protocol):
             self.__status = OBDStatus.CAR_CONNECTED
-            logger.info("Connected Successfully: PORT=%s BAUD=%s PROTOCOL=%s" %
+            logger.info("Connected Successfully: PORT=%s PORT=%s" %
                         (
-                            portname,
-                            self.__port.baudrate,
-                            self.__protocol.ELM_ID,
+                            addr,
+                            port
                         ))
         else:
             if self.__status == OBDStatus.OBD_CONNECTED:
@@ -243,10 +233,10 @@ class ELM327:
         """
 
         # -------------- try the ELM's auto protocol mode --------------
-        r = self.__send(b"ATSP0", delay=1)
+        #r = self.__send(b"ATSP0")
 
         # -------------- 0100 (first command, SEARCH protocols) --------------
-        r0100 = self.__send(b"0100", delay=1)
+        r0100 = self.__send(b"0100")
         if self.__has_message(r0100, "UNABLE TO CONNECT"):
             logger.error("Failed to query protocol 0100: unable to connect")
             return False
@@ -284,55 +274,6 @@ class ELM327:
         logger.error("Failed to determine protocol")
         return False
 
-    def set_baudrate(self, baud):
-        if baud is None:
-            # when connecting to pseudo terminal, don't bother with auto baud
-            if self.port_name().startswith("/dev/pts"):
-                logger.debug("Detected pseudo terminal, skipping baudrate setup")
-                return True
-            else:
-                return self.auto_baudrate()
-        else:
-            self.__port.baudrate = baud
-            return True
-
-    def auto_baudrate(self):
-        """
-        Detect the baud rate at which a connected ELM32x interface is operating.
-        Returns boolean for success.
-        """
-
-        # before we change the timout, save the "normal" value
-        timeout = self.__port.timeout
-        self.__port.timeout = self.timeout  # we're only talking with the ELM, so things should go quickly
-
-        for baud in self._TRY_BAUDS:
-            self.__port.baudrate = baud
-            self.__port.flushInput()
-            self.__port.flushOutput()
-
-            # Send a nonsense command to get a prompt back from the scanner
-            # (an empty command runs the risk of repeating a dangerous command)
-            # The first character might get eaten if the interface was busy,
-            # so write a second one (again so that the lone CR doesn't repeat
-            # the previous command)
-
-            # All commands should be terminated with carriage return according
-            # to ELM327 and STN11XX specifications
-            self.__port.write(b"\x7F\x7F\r")
-            self.__port.flush()
-            response = self.__port.read(1024)
-            logger.debug("Response from baud %d: %s" % (baud, repr(response)))
-
-            # watch for the prompt character
-            if response.endswith(b">"):
-                logger.debug("Choosing baud %d" % baud)
-                self.__port.timeout = timeout  # reinstate our original timeout
-                return True
-
-        logger.debug("Failed to choose baud")
-        self.__port.timeout = timeout  # reinstate our original timeout
-        return False
 
     def __isok(self, lines, expectEcho=False):
         if not lines:
@@ -357,7 +298,7 @@ class ELM327:
 
     def port_name(self):
         if self.__port is not None:
-            return self.__port.portstr
+            return "192.168.0.10"
         else:
             return ""
 
@@ -393,7 +334,7 @@ class ELM327:
             logger.info("cannot enter low power when unconnected")
             return None
 
-        lines = self.__send(b"ATLP", delay=1, end_marker=self.ELM_LP_ACTIVE)
+        lines = self.__send(b"ATLP", delay=1)
 
         if 'OK' in lines:
             logger.debug("Successfully entered low power mode")
@@ -468,14 +409,13 @@ class ELM327:
         messages = self.__protocol(lines)
         return messages
 
-    def __send(self, cmd, delay=None, end_marker=ELM_PROMPT):
+    def __send(self, cmd, delay=None):
         """
             unprotected send() function
 
             will __write() the given string, no questions asked.
             returns result of __read() (a list of line strings)
-            after an optional delay, until the end marker (by
-            default, the prompt) is seen
+            after an optional delay.
         """
         self.__write(cmd)
 
@@ -485,13 +425,13 @@ class ELM327:
             time.sleep(delay)
             delayed += delay
 
-        r = self.__read(end_marker=end_marker)
+        r = self.__read()
         while delayed < 1.0 and len(r) <= 0:
             d = 0.1
             logger.debug("no response; wait: %f seconds" % d)
             time.sleep(d)
             delayed += d
-            r = self.__read(end_marker=end_marker)
+            r = self.__read()
         return r
 
     def __write(self, cmd):
@@ -503,9 +443,7 @@ class ELM327:
             cmd += b"\r"  # terminate with carriage return in accordance with ELM327 and STN11XX specifications
             logger.debug("write: " + repr(cmd))
             try:
-                self.__port.flushInput()  # dump everything in the input buffer
-                self.__port.write(cmd)  # turn the string into bytes and write
-                self.__port.flush()  # wait for the output buffer to finish transmitting
+                self.__port.send(cmd)  # turn the string into bytes and write
             except Exception:
                 self.__status = OBDStatus.NOT_CONNECTED
                 self.__port.close()
@@ -515,12 +453,11 @@ class ELM327:
         else:
             logger.info("cannot perform __write() when unconnected")
 
-    def __read(self, end_marker=ELM_PROMPT):
+    def __read(self):
         """
             "low-level" read function
 
-            accumulates characters until the end marker (by
-            default, the prompt character) is seen
+            accumulates characters until the prompt character is seen
             returns a list of [/r/n] delimited strings
         """
         if not self.__port:
@@ -532,7 +469,8 @@ class ELM327:
         while True:
             # retrieve as much data as possible
             try:
-                data = self.__port.read(self.__port.in_waiting or 1)
+                #data = self.__port.read(self.__port.in_waiting or 1)
+                data = self.__port.recv(32)
             except Exception:
                 self.__status = OBDStatus.NOT_CONNECTED
                 self.__port.close()
@@ -547,8 +485,9 @@ class ELM327:
 
             buffer.extend(data)
 
-            # end on specified end-marker sequence
-            if end_marker in buffer:
+            # end on chevron (ELM prompt character) or an 'OK' which
+            # indicates we are entering low power state
+            if self.ELM_PROMPT in buffer or self.ELM_LP_ACTIVE in buffer:
                 break
 
         # log, and remove the "bytearray(   ...   )" part
