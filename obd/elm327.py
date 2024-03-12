@@ -181,7 +181,7 @@ class ELM327:
                 self.__error("Incorrect response from 'AT RV'")
                 return
             # by now, we've successfuly connected to the OBD socket
-        self.__status = OBDStatus.OBD_CONNECTED
+            self.__status = OBDStatus.OBD_CONNECTED
 
         # try to communicate with the car, and load the correct protocol parser
         if self.set_protocol(protocol):
