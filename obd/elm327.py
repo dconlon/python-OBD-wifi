@@ -2,18 +2,15 @@
 
 ########################################################################
 #                                                                      #
-# python-OBD: A python OBD-II serial module derived from pyobd         #
+# python-OBD-wifi: A python OBD-II wifi module derived from python-OBD #
 #                                                                      #
-# Copyright 2004 Donour Sizemore (donour@uchicago.edu)                 #
-# Copyright 2009 Secons Ltd. (www.obdtester.com)                       #
-# Copyright 2009 Peter J. Creath                                       #
-# Copyright 2016 Brendan Whitfield (brendan-w.com)                     #
+# Copyright 2019 Anon Mall                                             #
 #                                                                      #
 ########################################################################
 #                                                                      #
 # elm327.py                                                            #
 #                                                                      #
-# This file is part of python-OBD (a derivative of pyOBD)              #
+# This file is part of python-OBD-wifi (a derivative of python-OBD)    #
 #                                                                      #
 # python-OBD is free software: you can redistribute it and/or modify   #
 # it under the terms of the GNU General Public License as published by #
@@ -168,20 +165,21 @@ class ELM327:
         self.__status = OBDStatus.ELM_CONNECTED
 
         # -------------------------- AT RV (read volt) ------------------------
-        if check_voltage:
-            r = self.__send(b"AT RV")
-            if not r or len(r) != 1 or r[0] == '':
-                self.__error("No answer from 'AT RV'")
-                return
-            try:
-                if float(r[0].lower().replace('v', '')) < 6:
-                    logger.error("OBD2 socket disconnected")
-                    return
-            except ValueError as e:
-                self.__error("Incorrect response from 'AT RV'")
-                return
+        #if check_voltage:
+        #    r = self.__send(b"AT RV")
+        #    if not r or len(r) != 1 or r[0] == '':
+        #        self.__error("No answer from 'AT RV'")
+        #        return
+        #    try:
+        #        if float(r[0].lower().replace('v', '')) < 6:
+        #            logger.error("OBD2 socket disconnected")
+        #            return
+        #    except ValueError as e:
+        #        self.__error("Incorrect response from 'AT RV'")
+        #        return
             # by now, we've successfuly connected to the OBD socket
-            self.__status = OBDStatus.OBD_CONNECTED
+        #    self.__status = OBDStatus.OBD_CONNECTED
+        self.__status = OBDStatus.OBD_CONNECTED
 
         # try to communicate with the car, and load the correct protocol parser
         if self.set_protocol(protocol):

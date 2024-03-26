@@ -1,15 +1,10 @@
-python-OBD
+python-OBD-wifi
 ==========
 
 A python module for handling realtime sensor data from OBD-II vehicle
-ports. Works with ELM327 OBD-II adapters, and is fit for the Raspberry
-Pi.
+ports. It is derived from the python-OBD repo for serial data. This is an adaption for ELM327 Wifi compatible modules.
 
-Installation
-------------
 
-```Shell
-$ pip install obd
 ```
 
 Basic Usage
@@ -18,7 +13,7 @@ Basic Usage
 ```Python
 import obd
 
-connection = obd.OBD() # auto-connects to USB or RF port
+connection = obd.OBD("192.168.0.10", 35000) # connect to specific OBD-II-wifi Adapter. In our case it is a Panda by comma.ai
 
 cmd = obd.commands.SPEED # select an OBD command (sensor)
 
@@ -62,17 +57,6 @@ Here are a handful of the supported commands (sensors). For a full list, see [th
 -   Engine fuel rate
 -   Vehicle Identification Number (VIN)
 
-Common Issues
--------------
-
-### Bluetooth OBD-II Adapters
-
-There are sometimes connection issues when using a Bluetooth OBD-II adapter with some devices (the Raspberry Pi is a common problem). This can be fixed by setting the following arguments when setting up the connection:
-
-```Python
-fast=False, timeout=30
-```
-
 License
 -------
 
@@ -82,5 +66,6 @@ This library is forked from:
 
 -   <https://github.com/peterh/pyobd>
 -   <https://github.com/Pbartek/pyobd-pi>
+-   <https://github.com/brendan-w/python-OBD>
 
 Enjoy and drive safe!
