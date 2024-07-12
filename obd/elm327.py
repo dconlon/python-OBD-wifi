@@ -120,6 +120,7 @@ class ELM327:
         # ------------- open port -------------
         try:
             self.__port = socket.socket()
+            self.__port.settimeout(timeout)
             self.__port.connect((addr, port))
         except serial.SerialException as e:
             self.__error(e)

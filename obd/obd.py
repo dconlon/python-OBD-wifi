@@ -50,7 +50,7 @@ class OBD(object):
     """
 
     def __init__(self, addr=None, port=None, protocol=None, fast=True,
-                 timeout=0.1, check_voltage=True, start_low_power=False):
+                 timeout=10, check_voltage=True, start_low_power=False):
         self.interface = None
         self.supported_commands = set(commands.base_commands())
         self.fast = fast  # global switch for disabling optimizations
